@@ -1,0 +1,291 @@
+{
+  "name": "fde-text-analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "text-analyser",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -112
+      ],
+      "id": "796d839e-63d3-4ad8-a111-a102ff56cea4",
+      "name": "Webhook",
+      "webhookId": "363c8381-2fde-48d3-9341-da7bfa944589"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b7a13cf9-9403-485f-a023-4731573c6a8c",
+              "name": "=prompt",
+              "value": "={{\n  ($json.body?.mode ?? $json.mode) === 'sentiment'\n    ? `You are a strict sentiment classifier. Reply with exactly one of: Positive, Negative, or Neutral.\nText: ${$json.body?.text_to_analyze ?? $json.text_to_analyze ?? ''}`\n    : `Summarize the following text in 1–2 clear sentences with key facts preserved.\nText: ${$json.body?.text_to_analyze ?? $json.text_to_analyze ?? ''}`\n}}\n",
+              "type": "string"
+            },
+            {
+              "id": "3828bfd6-f2ed-43d7-9574-20c3db760420",
+              "name": "model",
+              "value": "gemini-2.5-flash",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        -208
+      ],
+      "id": "d1ad8947-c9aa-4f69-ac9a-15724a198b44",
+      "name": "BuildPrompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{$json[\"model\"]}}:generateContent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "API_KEY_HERE"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    contents: [\n      {\n        role: \"user\",\n        parts: [{ text: $json.prompt }]\n      }\n    ]\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        672,
+        -208
+      ],
+      "id": "88357dd8-0a9c-464e-aba6-67b40b895e09",
+      "name": "CallGemini"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node\nconst res     = $input.first().json;\nconst payload = res.body ?? res;                   // works with/without wrapper\nconst parts   = payload?.candidates?.[0]?.content?.parts ?? [];\nconst text    = parts.map(p => p.text ?? \"\").join(\" \").trim();\n\nreturn [{\n  json: {\n    final_result: text,\n    // optional debug fields you can remove later:\n    model: payload.modelVersion,\n    tokens_total: payload.usageMetadata?.totalTokenCount\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -208
+      ],
+      "id": "9ee63501-98aa-48d2-bbba-16a905fcd634",
+      "name": "ExtractText"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1120,
+        -208
+      ],
+      "id": "67b13d14-7eda-4d9d-83c8-960202c9aff8",
+      "name": "SendToFrontend"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"error\": \"text_to_analyze required\" }",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        448,
+        -16
+      ],
+      "id": "5c28cd14-7f4e-44cc-8f2b-c6c15b4567da",
+      "name": "SendErrorToFrontend"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c613fdd9-9678-47f3-93fb-461640f70339",
+              "leftValue": "={{$json.body?.text_to_analyze ?? $json.text_to_analyze}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cfd48b51-4f6f-4020-9041-de993fe4d1f4",
+              "leftValue": "={{($json.body?.text_to_analyze ?? $json.text_to_analyze)?.length || 0}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        -112
+      ],
+      "id": "0c6d63bb-5459-40fa-987d-082fa556d87b",
+      "name": "does text exist?"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "text_to_analyze": "Yesterday, the coastal town experienced unusually high tides...",
+          "mode": "summary"
+        }
+      },
+      {
+        "json": {
+          "text_to_analyze": "",
+          "mode": "summary"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "does text exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BuildPrompt": {
+      "main": [
+        [
+          {
+            "node": "CallGemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CallGemini": {
+      "main": [
+        [
+          {
+            "node": "ExtractText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ExtractText": {
+      "main": [
+        [
+          {
+            "node": "SendToFrontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "does text exist?": {
+      "main": [
+        [
+          {
+            "node": "BuildPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SendErrorToFrontend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c44b38f1-fa36-4cda-92d7-e5863395668c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f913ae218bd38509a34b6a42386477ff6dee8eb24cb8b83a3d4e9e81cb6d619a"
+  },
+  "id": "ATOgQrwwFspS8S9v",
+  "tags": []
+}
